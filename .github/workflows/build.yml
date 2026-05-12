@@ -1,4 +1,4 @@
-name: Build design tokens
+name: Build & sync design tokens to Picke-iOS
 
 on:
   push:
@@ -19,10 +19,27 @@ on:
       - 'package.json'
       - 'package-lock.json'
       - 'tsconfig.json'
-  workflow_dispatch:
+  workflow_dispatch: {}
+
+concurrency:
+  group: design-tokens-sync
+  cancel-in-progress: true
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 사용 전 사전 준비:
+#   1. Settings → Secrets and variables → Actions 에
+#      `IOS_REPO_PAT` 시크릿 등록 (SWYP-Find/Picke-iOS 의 Contents/PR write 권한 PAT)
+#   2. 아래 env 가 Picke-iOS 의 실제 디렉토리 구조와 일치하는지 확인.
+# ─────────────────────────────────────────────────────────────────────────────
+env:
+  TARGET_REPO: SWYP-Find/Picke-iOS
+  TARGET_BRANCH_BASE: develop
+  TARGET_BRANCH_PREFIX: chore/design-tokens-sync
+  TOKENS_JSON_DEST: Projects/Shared/DesignSystem/Resources/Mode 1.tokens.json
 
 jobs:
-  build:
+  validate:
+    name: Validate (Style Dictionary)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -32,18 +49,101 @@ jobs:
           node-version: '20'
           cache: 'npm'
 
-      - name: Install dependencies
+      - name: Install deps
         run: npm ci
 
       - name: Type check
         run: npm run typecheck
 
-      - name: Build iOS tokens
+      - name: Build (Style Dictionary)
         run: npm run build
 
-      - name: Upload iOS artifact
+      - name: Upload SD artifact
         uses: actions/upload-artifact@v4
         with:
-          name: design-tokens-ios
+          name: design-tokens-ios-sd
           path: build/ios/
           retention-days: 30
+
+  sync-to-ios:
+    name: Codegen & PR to Picke-iOS
+    needs: validate
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    runs-on: macos-latest
+    steps:
+      - name: Checkout design-tokens
+        uses: actions/checkout@v4
+
+      - name: Compute timestamped branch name
+        id: branch
+        run: |
+          ts=$(date -u +'%Y%m%d-%H%M%S')
+          name="${TARGET_BRANCH_PREFIX}-${ts}"
+          echo "name=${name}" >> "$GITHUB_OUTPUT"
+          echo "Auto-PR branch: ${name}"
+
+      - name: Checkout target iOS repo
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.TARGET_REPO }}
+          token: ${{ secrets.IOS_REPO_PAT }}
+          path: ios-repo
+          ref: ${{ env.TARGET_BRANCH_BASE }}
+          fetch-depth: 0
+
+      - name: Copy JSON into iOS repo
+        run: |
+          set -euo pipefail
+          mkdir -p "$(dirname "ios-repo/${TOKENS_JSON_DEST}")"
+          cp "Mode 1.tokens.json" "ios-repo/${TOKENS_JSON_DEST}"
+          echo "[sync] copied tokens JSON → ios-repo/${TOKENS_JSON_DEST}"
+
+      - name: Run iOS codegen (Tools/TokenGenerator.swift) — 2차 검증
+        working-directory: ios-repo
+        run: |
+          set -euo pipefail
+          swift --version
+          swift Tools/TokenGenerator.swift
+
+      - name: Show generated diff
+        working-directory: ios-repo
+        run: |
+          git status --short
+          git --no-pager diff --stat || true
+
+      - name: Open PR in Picke-iOS
+        uses: peter-evans/create-pull-request@v6
+        with:
+          path: ios-repo
+          token: ${{ secrets.IOS_REPO_PAT }}
+          base: ${{ env.TARGET_BRANCH_BASE }}
+          branch: ${{ steps.branch.outputs.name }}
+          delete-branch: true
+          title: 'chore: design-tokens 자동 반영'
+          commit-message: |
+            chore: design-tokens 자동 반영
+
+            source: ${{ github.repository }}@${{ github.sha }}
+          labels: |
+            design-tokens
+            auto-generated
+          body: |
+            ## 자동 생성된 디자인 토큰 반영
+
+            **Source**: [`${{ github.repository }}@${{ github.sha }}`](${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }})
+            **Trigger**: `${{ github.event_name }}` on `${{ github.ref_name }}`
+            **Workflow run**: [#${{ github.run_number }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
+            **Branch**: `${{ steps.branch.outputs.name }}` → `${{ env.TARGET_BRANCH_BASE }}`
+
+            ### 두 단계 검증 통과
+            - 1차: Style Dictionary v4 빌드 (DTCG `$type` / alias 정합성)
+            - 2차: `Tools/TokenGenerator.swift` 실행 (실제 사용 Swift 코드 생성)
+
+            ### 변경된 파일
+            - `Projects/Shared/DesignSystem/Resources/Mode 1.tokens.json`
+            - `Projects/Shared/DesignSystem/Sources/Color/ShapeStyle+.swift`
+            - `Projects/Shared/DesignSystem/Sources/Extension/CGFloat/CGFloat+Radius+.swift`
+            - `Projects/Shared/DesignSystem/Sources/Extension/CGFloat/CGFloat+Spacing+.swift`
+            - `Projects/Shared/DesignSystem/Sources/UI/Token/ComponentToken.swift`
+
+            > 자동 생성된 PR. 토큰 변경 시마다 새 브랜치/새 PR 이 생성되며, 머지 시 브랜치는 자동 삭제됩니다.

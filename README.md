@@ -11,26 +11,40 @@ Figma Variables(DTCG W3C 표준)로 정의된 디자인 토큰을 [Style Diction
 └──────────────┬───────────┘
                │ Mode 1.tokens.json
                ▼
-┌──────────────────────────┐
-│  design-tokens repo      │  ← 이 레포
-│  (Style Dictionary v4)   │
-└──────────────┬───────────┘
-               │ npm run build
+┌──────────────────────────────────┐
+│  design-tokens repo (이 레포)    │
+│                                  │
+│  ① Style Dictionary v4 빌드      │  ← 1차 검증 (DTCG / alias)
+│     → build/ios/ (artifact)      │
+│                                  │
+│  ② Picke-iOS checkout            │
+│  ③ Tools/TokenGenerator.swift    │  ← 2차 검증 (실제 사용 Swift)
+│  ④ 자동 PR (peter-evans/cpr)     │
+└──────────────┬───────────────────┘
+               │
                ▼
-┌────────────────────────────────────────┐
-│  build/ios/                            │
-│  ├─ Colors.xcassets/                   │
-│  │  ├─ Brand/      (primitive 색상)    │
-│  │  ├─ Semantic/   (의미 색상)         │
-│  │  └─ Component/  (컴포넌트 색상)     │
-│  ├─ Colors+Brand.swift                 │
-│  ├─ Colors+Semantic.swift              │
-│  ├─ Colors+Component.swift             │
-│  ├─ Component+Numbers.swift            │
-│  ├─ Spacing+Generated.swift            │
-│  └─ Radius+Generated.swift             │
-└────────────────────────────────────────┘
+┌────────────────────────────────────────────────┐
+│  SWYP-Find/Picke-iOS (develop)                 │
+│  PR: chore/design-tokens-sync-<timestamp>      │
+│                                                │
+│  반영 경로:                                    │
+│  Projects/Shared/DesignSystem/                 │
+│  ├─ Resources/Mode 1.tokens.json               │
+│  └─ Sources/                                   │
+│     ├─ Color/ShapeStyle+.swift                 │
+│     ├─ Extension/CGFloat/CGFloat+Radius+.swift │
+│     ├─ Extension/CGFloat/CGFloat+Spacing+.swift│
+│     └─ UI/Token/ComponentToken.swift           │
+└────────────────────────────────────────────────┘
 ```
+
+### Style Dictionary build/ios/ 산출물 (참고)
+
+`Tools/TokenGenerator.swift` 가 iOS 측 코드젠을 담당하기 때문에, Style Dictionary 의 `build/ios/` 산출물 (`Colors+Brand.swift`, `Colors.xcassets/` 등) 은 **현재 iOS 앱에서 직접 사용하지 않습니다.** Style Dictionary 의 역할은:
+
+- DTCG `$type` / alias 정합성 검증 (CI gate)
+- 향후 Android / Web 등 추가 컨슈머 확장 시 재사용
+- artifact 로 업로드되어 다운로드 가능
 
 ## 토큰 레이어 구조
 
@@ -80,9 +94,20 @@ struct PrimaryButton: View {
 ## 토큰 추가/수정 흐름
 
 1. Figma에서 Variables 편집
-2. `Mode 1.tokens.json`으로 export
-3. `npm run build`
-4. 산출물(`build/ios/`)을 iOS 프로젝트로 동기화
+2. `Mode 1.tokens.json` 으로 export → 이 레포에 push
+3. GitHub Actions 가 자동으로:
+   - Style Dictionary 빌드 (1차 검증)
+   - Picke-iOS checkout → `Tools/TokenGenerator.swift` 실행 (2차 검증)
+   - Picke-iOS 의 `develop` 으로 자동 PR
+4. iOS 팀이 PR review/merge
+
+## CI 사전 준비
+
+이 레포의 Settings → Secrets and variables → Actions 에 다음 시크릿을 등록:
+
+| 이름 | 권한 | 용도 |
+| --- | --- | --- |
+| `IOS_REPO_PAT` | `SWYP-Find/Picke-iOS` 의 Contents: write + Pull requests: write | 자동 PR 생성 |
 
 ## 구현 메모
 
