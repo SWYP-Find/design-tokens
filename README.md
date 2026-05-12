@@ -107,7 +107,7 @@ struct PrimaryButton: View {
 
 | 이름 | 권한 | 용도 |
 | --- | --- | --- |
-| `IOS_REPO_PAT` | `SWYP-Find/Picke-iOS` 의 Contents: write + Pull requests: write | 자동 PR 생성 |
+| `IOS_REPO_DISPATCH_TOKEN` | `SWYP-Find/Picke-iOS` 의 Contents: write + Pull requests: write | 자동 PR 생성 |
 
 ## 구현 메모
 

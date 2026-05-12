@@ -28,7 +28,8 @@ concurrency:
 # ─────────────────────────────────────────────────────────────────────────────
 # 사용 전 사전 준비:
 #   1. Settings → Secrets and variables → Actions 에
-#      `IOS_REPO_PAT` 시크릿 등록 (SWYP-Find/Picke-iOS 의 Contents/PR write 권한 PAT)
+#      `IOS_REPO_DISPATCH_TOKEN` 시크릿 등록
+#      (SWYP-Find/Picke-iOS 의 Contents/PR write 권한 fine-grained PAT)
 #   2. 아래 env 가 Picke-iOS 의 실제 디렉토리 구조와 일치하는지 확인.
 # ─────────────────────────────────────────────────────────────────────────────
 env:
@@ -86,7 +87,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: ${{ env.TARGET_REPO }}
-          token: ${{ secrets.IOS_REPO_PAT }}
+          token: ${{ secrets.IOS_REPO_DISPATCH_TOKEN }}
           path: ios-repo
           ref: ${{ env.TARGET_BRANCH_BASE }}
           fetch-depth: 0
@@ -115,7 +116,7 @@ jobs:
         uses: peter-evans/create-pull-request@v6
         with:
           path: ios-repo
-          token: ${{ secrets.IOS_REPO_PAT }}
+          token: ${{ secrets.IOS_REPO_DISPATCH_TOKEN }}
           base: ${{ env.TARGET_BRANCH_BASE }}
           branch: ${{ steps.branch.outputs.name }}
           delete-branch: true
