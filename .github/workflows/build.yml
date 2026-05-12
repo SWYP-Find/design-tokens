@@ -1,4 +1,4 @@
-name: Build & sync design tokens to Picke-iOS
+name: Build & sync design tokens to consumers
 
 on:
   push:
@@ -26,17 +26,19 @@ concurrency:
   cancel-in-progress: true
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 사용 전 사전 준비:
-#   1. Settings → Secrets and variables → Actions 에
-#      `IOS_REPO_DISPATCH_TOKEN` 시크릿 등록
-#      (SWYP-Find/Picke-iOS 의 Contents/PR write 권한 fine-grained PAT)
-#   2. 아래 env 가 Picke-iOS 의 실제 디렉토리 구조와 일치하는지 확인.
+# 사용 전 사전 준비 (Settings → Secrets and variables → Actions):
+#   • `IOS_REPO_DISPATCH_TOKEN`  — SWYP-Find/Picke-iOS Contents/PR write 권한 PAT
+#   • `APP_REPO_DISPATCH_TOKEN`  — SWYP-Find/APP      Contents/PR write 권한 PAT
+#   (두 레포 권한을 모두 가진 단일 PAT 으로 양쪽에 동일한 값을 등록해도 됨)
 # ─────────────────────────────────────────────────────────────────────────────
 env:
-  TARGET_REPO: SWYP-Find/Picke-iOS
-  TARGET_BRANCH_BASE: develop
+  IOS_REPO: SWYP-Find/Picke-iOS
+  IOS_BASE_BRANCH: develop
+  APP_REPO: SWYP-Find/APP
+  APP_BASE_BRANCH: dev
   TARGET_BRANCH_PREFIX: chore/design-tokens-sync
-  TOKENS_JSON_DEST: Projects/Shared/DesignSystem/Resources/Mode 1.tokens.json
+  TOKENS_JSON_DEST_IOS: Projects/Shared/DesignSystem/Resources/Mode 1.tokens.json
+  KOTLIN_DEST_APP: app/src/main/java/com/picke/app/ui/theme/tokens
 
 jobs:
   validate:
@@ -86,18 +88,18 @@ jobs:
       - name: Checkout target iOS repo
         uses: actions/checkout@v4
         with:
-          repository: ${{ env.TARGET_REPO }}
+          repository: ${{ env.IOS_REPO }}
           token: ${{ secrets.IOS_REPO_DISPATCH_TOKEN }}
           path: ios-repo
-          ref: ${{ env.TARGET_BRANCH_BASE }}
+          ref: ${{ env.IOS_BASE_BRANCH }}
           fetch-depth: 0
 
       - name: Copy JSON into iOS repo
         run: |
           set -euo pipefail
-          mkdir -p "$(dirname "ios-repo/${TOKENS_JSON_DEST}")"
-          cp "Mode 1.tokens.json" "ios-repo/${TOKENS_JSON_DEST}"
-          echo "[sync] copied tokens JSON → ios-repo/${TOKENS_JSON_DEST}"
+          mkdir -p "$(dirname "ios-repo/${TOKENS_JSON_DEST_IOS}")"
+          cp "Mode 1.tokens.json" "ios-repo/${TOKENS_JSON_DEST_IOS}"
+          echo "[sync] copied tokens JSON → ios-repo/${TOKENS_JSON_DEST_IOS}"
 
       - name: Run iOS codegen (Tools/TokenGenerator.swift) — 2차 검증
         working-directory: ios-repo
@@ -117,7 +119,7 @@ jobs:
         with:
           path: ios-repo
           token: ${{ secrets.IOS_REPO_DISPATCH_TOKEN }}
-          base: ${{ env.TARGET_BRANCH_BASE }}
+          base: ${{ env.IOS_BASE_BRANCH }}
           branch: ${{ steps.branch.outputs.name }}
           delete-branch: true
           title: 'chore: design-tokens 자동 반영'
@@ -134,7 +136,7 @@ jobs:
             **Source**: [`${{ github.repository }}@${{ github.sha }}`](${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }})
             **Trigger**: `${{ github.event_name }}` on `${{ github.ref_name }}`
             **Workflow run**: [#${{ github.run_number }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
-            **Branch**: `${{ steps.branch.outputs.name }}` → `${{ env.TARGET_BRANCH_BASE }}`
+            **Branch**: `${{ steps.branch.outputs.name }}` → `${{ env.IOS_BASE_BRANCH }}`
 
             ### 두 단계 검증 통과
             - 1차: Style Dictionary v4 빌드 (DTCG `$type` / alias 정합성)
@@ -146,5 +148,103 @@ jobs:
             - `Projects/Shared/DesignSystem/Sources/Extension/CGFloat/CGFloat+Radius+.swift`
             - `Projects/Shared/DesignSystem/Sources/Extension/CGFloat/CGFloat+Spacing+.swift`
             - `Projects/Shared/DesignSystem/Sources/UI/Token/ComponentToken.swift`
+
+            > 자동 생성된 PR. 토큰 변경 시마다 새 브랜치/새 PR 이 생성되며, 머지 시 브랜치는 자동 삭제됩니다.
+
+  sync-to-android:
+    name: Codegen & PR to APP (Compose)
+    needs: validate
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout design-tokens
+        uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install deps
+        run: npm ci
+
+      - name: Build Style Dictionary (Kotlin outputs)
+        run: npm run build
+
+      - name: Compute timestamped branch name
+        id: branch
+        run: |
+          ts=$(date -u +'%Y%m%d-%H%M%S')
+          name="${TARGET_BRANCH_PREFIX}-${ts}"
+          echo "name=${name}" >> "$GITHUB_OUTPUT"
+          echo "Auto-PR branch: ${name}"
+
+      - name: Checkout target APP repo
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.APP_REPO }}
+          token: ${{ secrets.APP_REPO_DISPATCH_TOKEN }}
+          path: app-repo
+          ref: ${{ env.APP_BASE_BRANCH }}
+          fetch-depth: 0
+
+      - name: Copy Kotlin tokens into APP repo
+        run: |
+          set -euo pipefail
+          DEST="app-repo/${KOTLIN_DEST_APP}"
+          mkdir -p "${DEST}"
+          cp build/android/*.kt "${DEST}/"
+          echo "[sync] copied $(ls build/android/*.kt | wc -l | tr -d ' ') Kotlin files → app-repo/${KOTLIN_DEST_APP}/"
+
+      - name: Show generated diff
+        working-directory: app-repo
+        run: |
+          git status --short
+          git --no-pager diff --stat || true
+
+      - name: Open PR in APP
+        uses: peter-evans/create-pull-request@v6
+        with:
+          path: app-repo
+          token: ${{ secrets.APP_REPO_DISPATCH_TOKEN }}
+          base: ${{ env.APP_BASE_BRANCH }}
+          branch: ${{ steps.branch.outputs.name }}
+          delete-branch: true
+          title: 'chore: design-tokens 자동 반영'
+          commit-message: |
+            chore: design-tokens 자동 반영
+
+            source: ${{ github.repository }}@${{ github.sha }}
+          labels: |
+            design-tokens
+            auto-generated
+          body: |
+            ## 자동 생성된 디자인 토큰 반영 (Android / Compose)
+
+            **Source**: [`${{ github.repository }}@${{ github.sha }}`](${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }})
+            **Trigger**: `${{ github.event_name }}` on `${{ github.ref_name }}`
+            **Workflow run**: [#${{ github.run_number }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
+            **Branch**: `${{ steps.branch.outputs.name }}` → `${{ env.APP_BASE_BRANCH }}`
+
+            ### 변경된 파일
+            `app/src/main/java/com/picke/app/ui/theme/tokens/`
+            - `BrandColorTokens.kt`
+            - `SemanticColorTokens.kt`
+            - `ComponentColorTokens.kt`
+            - `ComponentNumberTokens.kt`
+            - `SpacingTokens.kt`
+            - `RadiusTokens.kt`
+
+            ### 적용 가이드
+            기존 `ui/theme/Color.kt` / `Spacing.kt` / `Type.kt` 와 별개의 신규 패키지로 생성됩니다.
+            새 코드에서는 토큰 파일을 import해 사용하고, 기존 손코딩 정의는 점진적으로 마이그레이션하면 됩니다.
+
+            ```kotlin
+            import com.picke.app.ui.theme.tokens.BrandColorTokens
+            import com.picke.app.ui.theme.tokens.SpacingTokens
+
+            BrandColorTokens.primary500
+            SpacingTokens.s16
+            ```
 
             > 자동 생성된 PR. 토큰 변경 시마다 새 브랜치/새 PR 이 생성되며, 머지 시 브랜치는 자동 삭제됩니다.
