@@ -1224,7 +1224,7 @@
     },
     "2": {
       "$type": "number",
-      "$value": 2,
+      "$value": 3,
       "$extensions": {
         "com.figma.variableId": "VariableID:6762:6956",
         "com.figma.scopes": [
