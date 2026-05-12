@@ -14,37 +14,49 @@ Figma Variables(DTCG W3C 표준)로 정의된 디자인 토큰을 [Style Diction
 ┌──────────────────────────────────┐
 │  design-tokens repo (이 레포)    │
 │                                  │
-│  ① Style Dictionary v4 빌드      │  ← 1차 검증 (DTCG / alias)
-│     → build/ios/ (artifact)      │
+│  validate                        │
+│   • Style Dictionary v4 빌드     │  ← DTCG / alias 정합성 검증
 │                                  │
-│  ② Picke-iOS checkout            │
-│  ③ Tools/TokenGenerator.swift    │  ← 2차 검증 (실제 사용 Swift)
-│  ④ 자동 PR (peter-evans/cpr)     │
-└──────────────┬───────────────────┘
-               │
-               ▼
-┌────────────────────────────────────────────────┐
-│  SWYP-Find/Picke-iOS (develop)                 │
-│  PR: chore/design-tokens-sync-<timestamp>      │
-│                                                │
-│  반영 경로:                                    │
-│  Projects/Shared/DesignSystem/                 │
-│  ├─ Resources/Mode 1.tokens.json               │
-│  └─ Sources/                                   │
-│     ├─ Color/ShapeStyle+.swift                 │
-│     ├─ Extension/CGFloat/CGFloat+Radius+.swift │
-│     ├─ Extension/CGFloat/CGFloat+Spacing+.swift│
-│     └─ UI/Token/ComponentToken.swift           │
-└────────────────────────────────────────────────┘
+│       ┌──────────────────┐       │
+│       │ sync-to-ios      │       │
+│       │ • Picke-iOS chk  │       │
+│       │ • TokenGenerator │       │   ← 2차 검증 (Swift)
+│       │ • peter-evans PR │       │
+│       └──────────────────┘       │
+│       ┌──────────────────┐       │
+│       │ sync-to-android  │       │
+│       │ • APP checkout   │       │
+│       │ • Kotlin 복사    │       │   (별도 generator 없음)
+│       │ • peter-evans PR │       │
+│       └──────────────────┘       │
+└──────┬────────────────┬──────────┘
+       │                │
+       ▼                ▼
+┌──────────────────┐  ┌────────────────────────┐
+│ Picke-iOS develop│  │ APP dev                │
+│ Swift 4 + JSON   │  │ tokens/ 패키지에       │
+│                  │  │ Kotlin 6개 파일        │
+└──────────────────┘  └────────────────────────┘
 ```
 
 ### Style Dictionary build/ios/ 산출물 (참고)
 
-`Tools/TokenGenerator.swift` 가 iOS 측 코드젠을 담당하기 때문에, Style Dictionary 의 `build/ios/` 산출물 (`Colors+Brand.swift`, `Colors.xcassets/` 등) 은 **현재 iOS 앱에서 직접 사용하지 않습니다.** Style Dictionary 의 역할은:
+`Tools/TokenGenerator.swift` 가 iOS 측 코드젠을 담당하기 때문에, Style Dictionary 의 `build/ios/` 산출물 (`Colors+Brand.swift`, `Colors.xcassets/` 등) 은 **현재 iOS 앱에서 직접 사용하지 않습니다.** Style Dictionary 의 iOS 출력은 JSON 유효성 검증 + Android/Web 등 다른 컨슈머용.
 
-- DTCG `$type` / alias 정합성 검증 (CI gate)
-- 향후 Android / Web 등 추가 컨슈머 확장 시 재사용
-- artifact 로 업로드되어 다운로드 가능
+### Android (Compose) 산출물 — 직접 사용
+
+`SWYP-Find/APP` 에는 자체 generator 가 없어, Style Dictionary 가 직접 Compose Kotlin 토큰을 생성합니다:
+
+| 파일 | 내용 |
+| --- | --- |
+| `BrandColorTokens.kt` | `BrandColorTokens.primary500` 같은 raw 색상 (`Color(0xFFAARRGGBB)`) |
+| `SemanticColorTokens.kt` | `SemanticColorTokens.textPrimary` 등 의미 색상 |
+| `ComponentColorTokens.kt` | 컴포넌트별 색상 |
+| `ComponentNumberTokens.kt` | `ComponentNumberTokens.buttonRadius: Dp = 2.dp` |
+| `SpacingTokens.kt` | `SpacingTokens.s16: Dp = 16.dp` |
+| `RadiusTokens.kt` | `RadiusTokens.default: Dp = 2.dp` |
+
+기존 손코딩된 `Color.kt` / `Spacing.kt` / `Type.kt` 와 별개의 `ui/theme/tokens/` 패키지에 생성되므로 충돌 없이 점진 마이그레이션 가능.
 
 ## 토큰 레이어 구조
 
@@ -107,7 +119,10 @@ struct PrimaryButton: View {
 
 | 이름 | 권한 | 용도 |
 | --- | --- | --- |
-| `IOS_REPO_DISPATCH_TOKEN` | `SWYP-Find/Picke-iOS` 의 Contents: write + Pull requests: write | 자동 PR 생성 |
+| `IOS_REPO_DISPATCH_TOKEN` | `SWYP-Find/Picke-iOS` 의 Contents: write + Pull requests: write | iOS 자동 PR |
+| `APP_REPO_DISPATCH_TOKEN` | `SWYP-Find/APP` 의 Contents: write + Pull requests: write | Android 자동 PR |
+
+> 두 레포 권한을 모두 가진 단일 PAT 으로 양쪽 secret 에 동일한 값을 등록해도 됩니다.
 
 ## 구현 메모
 
