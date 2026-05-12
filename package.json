@@ -1,0 +1,23 @@
+{
+  "name": "swyp-find-design-tokens",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Figma Variables (DTCG) → Style Dictionary → iOS (Swift + xcassets)",
+  "scripts": {
+    "build": "tsx build.ts",
+    "clean": "rm -rf build",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "style-dictionary": "^4.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "tsx": "^4.7.0",
+    "typescript": "^5.4.0"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
