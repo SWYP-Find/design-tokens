@@ -7,9 +7,9 @@ Figma Variables(DTCG W3C 표준)로 정의된 디자인 토큰을 [Style Diction
 ```
 ┌──────────────────────────┐
 │  Figma Variables         │
-│  (export → DTCG JSON)    │
+│  (Tokens Studio export)  │
 └──────────────┬───────────┘
-               │ Mode 1.tokens.json
+               │ primitive / semantic / component .json
                ▼
 ┌──────────────────────────────────┐
 │  design-tokens repo (이 레포)    │
@@ -47,29 +47,29 @@ Figma Variables(DTCG W3C 표준)로 정의된 디자인 토큰을 [Style Diction
 
 `SWYP-Find/APP` 에는 자체 generator 가 없어, Style Dictionary 가 직접 Compose Kotlin 토큰을 생성합니다:
 
-| 파일 | 내용 |
-| --- | --- |
-| `BrandColorTokens.kt` | `BrandColorTokens.primary500` 같은 raw 색상 (`Color(0xFFAARRGGBB)`) |
-| `SemanticColorTokens.kt` | `SemanticColorTokens.textPrimary` 등 의미 색상 |
-| `ComponentColorTokens.kt` | 컴포넌트별 색상 |
-| `ComponentNumberTokens.kt` | `ComponentNumberTokens.buttonRadius: Dp = 2.dp` |
-| `SpacingTokens.kt` | `SpacingTokens.s16: Dp = 16.dp` |
-| `RadiusTokens.kt` | `RadiusTokens.default: Dp = 2.dp` |
+| 파일                       | 내용                                                                |
+| -------------------------- | ------------------------------------------------------------------- |
+| `BrandColorTokens.kt`      | `BrandColorTokens.primary500` 같은 raw 색상 (`Color(0xFFAARRGGBB)`) |
+| `SemanticColorTokens.kt`   | `SemanticColorTokens.textPrimary` 등 의미 색상                      |
+| `ComponentColorTokens.kt`  | 컴포넌트별 색상                                                     |
+| `ComponentNumberTokens.kt` | `ComponentNumberTokens.buttonRadius: Dp = 2.dp`                     |
+| `SpacingTokens.kt`         | `SpacingTokens.s16: Dp = 16.dp`                                     |
+| `RadiusTokens.kt`          | `RadiusTokens.default: Dp = 2.dp`                                   |
 
 기존 손코딩된 `Color.kt` / `Spacing.kt` / `Type.kt` 와 별개의 `ui/theme/tokens/` 패키지에 생성되므로 충돌 없이 점진 마이그레이션 가능.
 
 ## 토큰 레이어 구조
 
-| 레이어 | DTCG 경로 | 용도 | 산출물 enum |
-| --- | --- | --- | --- |
-| Primitive (Brand) | `Colors.brand.<group>.<step>` | raw 색상 (Primary/Secondary/Beige/Neutral × 50–900) | `BrandColors` |
-| Semantic | `Colors.semantic.<role>.<variant>` | 의미 색상 (text/border/surface/background/status) | `SemanticColors` |
-| Component | `Component.<name>.<state>` | 컴포넌트별 색상 (button/input/badge) | `ComponentColors` |
-| Spacing | `Spacing.<step>` | 간격 (0, 2, 4, …, 96) | `Spacing` |
-| Radius | `Radius.<step>` | 모서리 반경 (none / default / full) | `Radius` |
-| Component Number | `Component.<name>.<key>` (`$type=number`) | 컴포넌트 수치 (button.radius 등) | `ComponentNumbers` |
+| 레이어            | DTCG 경로 (소스 파일)              | 용도                                              | 산출물 enum        |
+| ----------------- | ---------------------------------- | ------------------------------------------------- | ------------------ |
+| Primitive (Brand) | `<group>.<step>` (primitive.json)  | raw 색상 (Primary/Secondary/Beige/Gray × 50–900)  | `BrandColors`      |
+| Semantic          | `<role>.<variant>` (semantic.json) | 의미 색상 (text/border/surface/background/action) | `SemanticColors`   |
+| Component         | `<name>.<state>` (component.json)  | 컴포넌트별 색상 (button/input/badge…)             | `ComponentColors`  |
+| Spacing           | `spacing-<n>` (primitive.json)     | 간격 (0, 2, 4, …, 96)                             | `Spacing`          |
+| Radius            | `radius-<step>` (semantic.json)    | 모서리 반경 (default / max)                       | `Radius`           |
+| Component Number  | `<name>.<key>` numeric types       | 컴포넌트 수치 (sizing/spacing/borderRadius 등)    | `ComponentNumbers` |
 
-세 색상 레이어 모두 `Mode 1.tokens.json` 한 파일에서 자동으로 분리됩니다. 참조(`{Colors.brand.primary.500}`)는 Style Dictionary가 빌드 시점에 해석합니다.
+세 색상 레이어는 `primitive.json` / `semantic.json` / `component.json` 로 나뉘어 export 되며, Style Dictionary가 deep-merge 후 alias(`{primary.500}` 등)를 빌드 시점에 해석합니다.
 
 ## 로컬 빌드
 
@@ -106,7 +106,7 @@ struct PrimaryButton: View {
 ## 토큰 추가/수정 흐름
 
 1. Figma에서 Variables 편집
-2. `Mode 1.tokens.json` 으로 export → 이 레포에 push
+2. Tokens Studio 로 `primitive.json` / `semantic.json` / `component.json` export → 이 레포에 push
 3. GitHub Actions 가 자동으로:
    - Style Dictionary 빌드 (1차 검증)
    - Picke-iOS checkout → `Tools/TokenGenerator.swift` 실행 (2차 검증)
@@ -117,10 +117,10 @@ struct PrimaryButton: View {
 
 이 레포의 Settings → Secrets and variables → Actions 에 다음 시크릿을 등록:
 
-| 이름 | 권한 | 용도 |
-| --- | --- | --- |
-| `IOS_REPO_DISPATCH_TOKEN` | `SWYP-Find/Picke-iOS` 의 Contents: write + Pull requests: write | iOS 자동 PR |
-| `APP_REPO_DISPATCH_TOKEN` | `SWYP-Find/APP` 의 Contents: write + Pull requests: write | Android 자동 PR |
+| 이름                      | 권한                                                            | 용도            |
+| ------------------------- | --------------------------------------------------------------- | --------------- |
+| `IOS_REPO_DISPATCH_TOKEN` | `SWYP-Find/Picke-iOS` 의 Contents: write + Pull requests: write | iOS 자동 PR     |
+| `APP_REPO_DISPATCH_TOKEN` | `SWYP-Find/APP` 의 Contents: write + Pull requests: write       | Android 자동 PR |
 
 > 두 레포 권한을 모두 가진 단일 PAT 으로 양쪽 secret 에 동일한 값을 등록해도 됩니다.
 

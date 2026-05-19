@@ -4,21 +4,29 @@ on:
   push:
     branches: [main]
     paths:
-      - 'Mode 1.tokens.json'
-      - 'style-dictionary.config.ts'
-      - 'build.ts'
-      - 'package.json'
-      - 'package-lock.json'
-      - 'tsconfig.json'
-      - '.github/workflows/build.yml'
+      - "primitive.json"
+      - "semantic.json"
+      - "component.json"
+      - "$metadata.json"
+      - "$themes.json"
+      - "style-dictionary.config.ts"
+      - "build.ts"
+      - "package.json"
+      - "package-lock.json"
+      - "tsconfig.json"
+      - ".github/workflows/build.yml"
   pull_request:
     paths:
-      - 'Mode 1.tokens.json'
-      - 'style-dictionary.config.ts'
-      - 'build.ts'
-      - 'package.json'
-      - 'package-lock.json'
-      - 'tsconfig.json'
+      - "primitive.json"
+      - "semantic.json"
+      - "component.json"
+      - "$metadata.json"
+      - "$themes.json"
+      - "style-dictionary.config.ts"
+      - "build.ts"
+      - "package.json"
+      - "package-lock.json"
+      - "tsconfig.json"
   workflow_dispatch: {}
 
 concurrency:
@@ -37,7 +45,7 @@ env:
   APP_REPO: SWYP-Find/APP
   APP_BASE_BRANCH: dev
   TARGET_BRANCH_PREFIX: chore/design-tokens-sync
-  TOKENS_JSON_DEST_IOS: Projects/Shared/DesignSystem/Resources/Mode 1.tokens.json
+  TOKENS_DEST_IOS_DIR: Projects/Shared/DesignSystem/Resources
   KOTLIN_DEST_APP: app/src/main/java/com/picke/app/ui/theme/tokens
 
 jobs:
@@ -49,8 +57,8 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
-          cache: 'npm'
+          node-version: "20"
+          cache: "npm"
 
       - name: Install deps
         run: npm ci
@@ -94,12 +102,17 @@ jobs:
           ref: ${{ env.IOS_BASE_BRANCH }}
           fetch-depth: 0
 
-      - name: Copy JSON into iOS repo
+      - name: Copy token JSON files into iOS repo
         run: |
           set -euo pipefail
-          mkdir -p "$(dirname "ios-repo/${TOKENS_JSON_DEST_IOS}")"
-          cp "Mode 1.tokens.json" "ios-repo/${TOKENS_JSON_DEST_IOS}"
-          echo "[sync] copied tokens JSON → ios-repo/${TOKENS_JSON_DEST_IOS}"
+          DEST="ios-repo/${TOKENS_DEST_IOS_DIR}"
+          mkdir -p "${DEST}"
+          # 구버전 단일 파일 제거 — 신규 generator 는 더 이상 읽지 않음
+          rm -f "${DEST}/Mode 1.tokens.json"
+          for f in primitive.json semantic.json component.json '$metadata.json' '$themes.json'; do
+            cp "$f" "${DEST}/$f"
+          done
+          echo "[sync] copied 5 token files → ${DEST}/"
 
       - name: Run iOS codegen (Tools/TokenGenerator.swift) — 2차 검증
         working-directory: ios-repo
@@ -122,7 +135,7 @@ jobs:
           base: ${{ env.IOS_BASE_BRANCH }}
           branch: ${{ steps.branch.outputs.name }}
           delete-branch: true
-          title: 'chore: design-tokens 자동 반영'
+          title: "chore: design-tokens 자동 반영"
           commit-message: |
             chore: design-tokens 자동 반영
 
@@ -143,10 +156,11 @@ jobs:
             - 2차: `Tools/TokenGenerator.swift` 실행 (실제 사용 Swift 코드 생성)
 
             ### 변경된 파일
-            - `Projects/Shared/DesignSystem/Resources/Mode 1.tokens.json`
+            - `Projects/Shared/DesignSystem/Resources/{primitive,semantic,component,$metadata,$themes}.json`
             - `Projects/Shared/DesignSystem/Sources/Color/ShapeStyle+.swift`
             - `Projects/Shared/DesignSystem/Sources/Extension/CGFloat/CGFloat+Radius+.swift`
             - `Projects/Shared/DesignSystem/Sources/Extension/CGFloat/CGFloat+Spacing+.swift`
+            - `Projects/Shared/DesignSystem/Sources/Extension/CGFloat/CGFloat+Component+.swift`
             - `Projects/Shared/DesignSystem/Sources/UI/Token/ComponentToken.swift`
 
             > 자동 생성된 PR. 토큰 변경 시마다 새 브랜치/새 PR 이 생성되며, 머지 시 브랜치는 자동 삭제됩니다.
@@ -162,8 +176,8 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
-          cache: 'npm'
+          node-version: "20"
+          cache: "npm"
 
       - name: Install deps
         run: npm ci
@@ -210,7 +224,7 @@ jobs:
           base: ${{ env.APP_BASE_BRANCH }}
           branch: ${{ steps.branch.outputs.name }}
           delete-branch: true
-          title: 'chore: design-tokens 자동 반영'
+          title: "chore: design-tokens 자동 반영"
           commit-message: |
             chore: design-tokens 자동 반영
 
