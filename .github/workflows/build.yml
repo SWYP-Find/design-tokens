@@ -36,16 +36,16 @@ concurrency:
 # ─────────────────────────────────────────────────────────────────────────────
 # 사용 전 사전 준비 (Settings → Secrets and variables → Actions):
 #   • `IOS_REPO_DISPATCH_TOKEN`  — SWYP-Find/Picke-iOS Contents/PR write 권한 PAT
-#   • `APP_REPO_DISPATCH_TOKEN`  — SWYP-Find/APP      Contents/PR write 권한 PAT
+#   • `APP_REPO_DISPATCH_TOKEN`  — SWYP-Find/Picke-android Contents/PR write 권한 PAT
 #   (두 레포 권한을 모두 가진 단일 PAT 으로 양쪽에 동일한 값을 등록해도 됨)
 # ─────────────────────────────────────────────────────────────────────────────
 env:
   IOS_REPO: SWYP-Find/Picke-iOS
   IOS_BASE_BRANCH: develop
-  APP_REPO: SWYP-Find/APP
-  APP_BASE_BRANCH: dev
+  APP_REPO: SWYP-Find/Picke-android
+  APP_BASE_BRANCH: develop
   TARGET_BRANCH_PREFIX: chore/design-tokens-sync
-  KOTLIN_DEST_APP: app/src/main/java/com/picke/app/ui/theme/tokens
+  KOTLIN_DEST_APP: presentation/src/main/java/com/picke/presentation/ui/theme/tokens
 
 jobs:
   validate:
@@ -169,7 +169,7 @@ jobs:
             > 자동 생성된 PR. 토큰 변경 시마다 새 브랜치/새 PR 이 생성되며, 머지 시 브랜치는 자동 삭제됩니다.
 
   sync-to-android:
-    name: Codegen & PR to APP (Compose)
+    name: Codegen & PR to Picke-android (Compose)
     needs: validate
     if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
@@ -196,7 +196,7 @@ jobs:
           echo "name=${name}" >> "$GITHUB_OUTPUT"
           echo "Auto-PR branch: ${name}"
 
-      - name: Checkout target APP repo
+      - name: Checkout target Picke-android repo
         uses: actions/checkout@v4
         with:
           repository: ${{ env.APP_REPO }}
@@ -205,7 +205,7 @@ jobs:
           ref: ${{ env.APP_BASE_BRANCH }}
           fetch-depth: 0
 
-      - name: Copy Kotlin tokens into APP repo
+      - name: Copy Kotlin tokens into Picke-android repo
         run: |
           set -euo pipefail
           DEST="app-repo/${KOTLIN_DEST_APP}"
@@ -219,7 +219,7 @@ jobs:
           git status --short
           git --no-pager diff --stat || true
 
-      - name: Open PR in APP
+      - name: Open PR in Picke-android
         uses: peter-evans/create-pull-request@v6
         with:
           path: app-repo
@@ -244,7 +244,7 @@ jobs:
             **Branch**: `${{ steps.branch.outputs.name }}` → `${{ env.APP_BASE_BRANCH }}`
 
             ### 변경된 파일
-            `app/src/main/java/com/picke/app/ui/theme/tokens/`
+            `presentation/src/main/java/com/picke/presentation/ui/theme/tokens/`
             - `BrandColorTokens.kt`
             - `SemanticColorTokens.kt`
             - `ComponentColorTokens.kt`
@@ -253,12 +253,12 @@ jobs:
             - `RadiusTokens.kt`
 
             ### 적용 가이드
-            기존 `ui/theme/Color.kt` / `Spacing.kt` / `Type.kt` 와 별개의 신규 패키지로 생성됩니다.
-            새 코드에서는 토큰 파일을 import해 사용하고, 기존 손코딩 정의는 점진적으로 마이그레이션하면 됩니다.
+            값만 바뀐 토큰은 `PickeColors` 등이 참조하므로 앱 코드 수정 없이 반영됩니다.
+            토큰 이름이 바뀌거나 삭제되면 참조하는 쪽(`PickeColors` 등)에서 컴파일 에러가 나므로 함께 수정해야 합니다.
 
             ```kotlin
-            import com.picke.app.ui.theme.tokens.BrandColorTokens
-            import com.picke.app.ui.theme.tokens.SpacingTokens
+            import com.picke.presentation.ui.theme.tokens.BrandColorTokens
+            import com.picke.presentation.ui.theme.tokens.SpacingTokens
 
             BrandColorTokens.primary500
             SpacingTokens.s16
