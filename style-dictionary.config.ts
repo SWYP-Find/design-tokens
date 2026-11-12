@@ -9,7 +9,20 @@ import type { Config, TransformedToken } from 'style-dictionary/types';
 // Style Dictionary deep-merges these into a single tree. Bare references like
 // `{primary.500}` resolve against the merged result, so the order here only
 // matters for collision overwriting (which we don't rely on).
-const SOURCE_FILES = ['primitive.json', 'semantic.json', 'component.json'];
+//
+// figma/*.json are Figma Variables exported via Tokens Studio "Import variables"
+// (new naming scheme: `color/text/basic`, ...). Their roots (`color`, `typo`,
+// `number`, `border-width`) don't overlap the legacy roots above. Only their
+// colors are emitted for now; numeric tokens are ignored by every filter.
+const FIGMA_PRIMITIVE_FILE = 'figma/primitive.json';
+const FIGMA_MODE_FILE = 'figma/mode.json';
+const SOURCE_FILES = [
+  'primitive.json',
+  'semantic.json',
+  'component.json',
+  FIGMA_PRIMITIVE_FILE,
+  FIGMA_MODE_FILE,
+];
 
 // ─────────────────────────────────────────────────────────────────────────────
 // 2. Naming helpers
@@ -119,6 +132,21 @@ const isSemanticColor = (t: TransformedToken) =>
 const isComponentColor = (t: TransformedToken) =>
   COMPONENT_ROOTS.has(t.path[0]) && tokenType(t) === 'color';
 
+// Figma Variables colors — `color.<palette>.<step>` (primitive) and
+// `color.<role>.<name>` (mode). Split by source file so a new palette/role in
+// Figma lands in the right object without touching this config.
+const isFigmaColor = (t: TransformedToken) =>
+  t.path[0] === 'color' && tokenType(t) === 'color';
+
+const sourceFile = (t: TransformedToken) =>
+  path.normalize(String(t.filePath ?? ''));
+
+const isFigmaPrimitiveColor = (t: TransformedToken) =>
+  isFigmaColor(t) && sourceFile(t) === path.normalize(FIGMA_PRIMITIVE_FILE);
+
+const isFigmaModeColor = (t: TransformedToken) =>
+  isFigmaColor(t) && sourceFile(t) === path.normalize(FIGMA_MODE_FILE);
+
 const isPrimitiveSizing = (t: TransformedToken) =>
   PRIMITIVE_SIZING_ROOTS.has(t.path[0]) && tokenType(t) === 'sizing';
 
@@ -151,6 +179,7 @@ function xcassetsNamespace(tokenPath: string[]): string | null {
   if (STATUS_GROUPS.has(root) && tokenPath.length === 2) return 'Status';
   if (SEMANTIC_ROOTS.has(root)) return 'Semantic';
   if (COMPONENT_ROOTS.has(root)) return 'Component';
+  if (root === 'color') return 'Figma';
   return null;
 }
 
@@ -488,6 +517,22 @@ StyleDictionary.registerFormat({
     ),
 });
 StyleDictionary.registerFormat({
+  name: 'kotlin/figma-primitive-colors',
+  format: ({ dictionary }) =>
+    emitKotlinColorObject(
+      'PrimitiveColorTokens',
+      dictionary.allTokens.filter(isFigmaPrimitiveColor),
+    ),
+});
+StyleDictionary.registerFormat({
+  name: 'kotlin/figma-mode-colors',
+  format: ({ dictionary }) =>
+    emitKotlinColorObject(
+      'ModeColorTokens',
+      dictionary.allTokens.filter(isFigmaModeColor),
+    ),
+});
+StyleDictionary.registerFormat({
   name: 'kotlin/component-numbers',
   format: ({ dictionary }) =>
     emitKotlinDpObject(
@@ -548,6 +593,8 @@ export const config: Config = {
         { destination: 'ComponentNumberTokens.kt', format: 'kotlin/component-numbers' },
         { destination: 'SpacingTokens.kt', format: 'kotlin/spacing' },
         { destination: 'RadiusTokens.kt', format: 'kotlin/radius' },
+        { destination: 'PrimitiveColorTokens.kt', format: 'kotlin/figma-primitive-colors' },
+        { destination: 'ModeColorTokens.kt', format: 'kotlin/figma-mode-colors' },
       ],
     },
   },

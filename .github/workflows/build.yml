@@ -7,6 +7,8 @@ on:
       - "primitive.json"
       - "semantic.json"
       - "component.json"
+      - "figma/primitive.json"
+      - "figma/mode.json"
       - "$metadata.json"
       - "$themes.json"
       - "style-dictionary.config.ts"
@@ -20,6 +22,8 @@ on:
       - "primitive.json"
       - "semantic.json"
       - "component.json"
+      - "figma/primitive.json"
+      - "figma/mode.json"
       - "$metadata.json"
       - "$themes.json"
       - "style-dictionary.config.ts"
@@ -251,6 +255,8 @@ jobs:
             - `ComponentNumberTokens.kt`
             - `SpacingTokens.kt`
             - `RadiusTokens.kt`
+            - `PrimitiveColorTokens.kt` (Figma 변수 팔레트 색)
+            - `ModeColorTokens.kt` (Figma 변수 역할 색)
 
             ### 적용 가이드
             값만 바뀐 토큰은 `PickeColors` 등이 참조하므로 앱 코드 수정 없이 반영됩니다.

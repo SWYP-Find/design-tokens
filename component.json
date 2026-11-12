@@ -72,17 +72,25 @@
       "background": {
         "default": {
           "$type": "color",
-          "$value": "{action.secondary.default}"
+          "$value": "{surface.primary.subtle}"
         },
         "pressed": {
           "$type": "color",
           "$value": "{action.beige.strong}"
+        },
+        "disabled": {
+          "$type": "color",
+          "$value": "{background.subtler}"
         }
       },
       "text": {
         "default": {
           "$type": "color",
           "$value": "{text.primary}"
+        },
+        "disabled": {
+          "$type": "color",
+          "$value": "{text.muted}"
         }
       }
     }

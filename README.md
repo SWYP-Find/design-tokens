@@ -10,6 +10,7 @@ Figma Variables(DTCG W3C 표준)로 정의된 디자인 토큰을 [Style Diction
 │  (Tokens Studio export)  │
 └──────────────┬───────────┘
                │ primitive / semantic / component .json
+               │ figma/primitive / figma/mode .json
                ▼
 ┌──────────────────────────────────┐
 │  design-tokens repo (이 레포)    │
@@ -35,7 +36,7 @@ Figma Variables(DTCG W3C 표준)로 정의된 디자인 토큰을 [Style Diction
 ┌──────────────────┐  ┌────────────────────────┐
 │ Picke-iOS develop│  │ APP dev                │
 │ Swift 4 + JSON   │  │ tokens/ 패키지에       │
-│                  │  │ Kotlin 6개 파일        │
+│                  │  │ Kotlin 8개 파일        │
 └──────────────────┘  └────────────────────────┘
 ```
 
@@ -55,6 +56,8 @@ Figma Variables(DTCG W3C 표준)로 정의된 디자인 토큰을 [Style Diction
 | `ComponentNumberTokens.kt` | `ComponentNumberTokens.buttonRadius: Dp = 2.dp`                     |
 | `SpacingTokens.kt`         | `SpacingTokens.s16: Dp = 16.dp`                                     |
 | `RadiusTokens.kt`          | `RadiusTokens.default: Dp = 2.dp`                                   |
+| `PrimitiveColorTokens.kt`  | Figma 변수 팔레트 색 `PrimitiveColorTokens.colorGray800` (figma/primitive.json) |
+| `ModeColorTokens.kt`       | Figma 변수 역할 색 `ModeColorTokens.colorTextBasic` (figma/mode.json)          |
 
 `presentation` 모듈의 `com.picke.presentation.ui.theme.tokens` 패키지(`presentation/src/main/java/com/picke/presentation/ui/theme/tokens/`)에 생성되며, `PickeColors` 등이 이를 참조합니다.
 
@@ -68,8 +71,12 @@ Figma Variables(DTCG W3C 표준)로 정의된 디자인 토큰을 [Style Diction
 | Spacing           | `spacing-<n>` (primitive.json)     | 간격 (0, 2, 4, …, 96)                             | `Spacing`          |
 | Radius            | `radius-<step>` (semantic.json)    | 모서리 반경 (default / max)                       | `Radius`           |
 | Component Number  | `<name>.<key>` numeric types       | 컴포넌트 수치 (sizing/spacing/borderRadius 등)    | `ComponentNumbers` |
+| Figma Primitive   | `color.<palette>.<step>` (figma/primitive.json) | Figma 변수 팔레트 색 (secondary/beige/gray/primary/warning/danger × 50–900, common.white) | `PrimitiveColorTokens` (Android) |
+| Figma Mode        | `color.<role>.<name>` (figma/mode.json)         | Figma 변수 역할 색 (background/surface/border/divider/text/icon/element/button/input) | `ModeColorTokens` (Android) |
 
 세 색상 레이어는 `primitive.json` / `semantic.json` / `component.json` 로 나뉘어 export 되며, Style Dictionary가 deep-merge 후 alias(`{primary.500}` 등)를 빌드 시점에 해석합니다.
+
+`figma/` 의 두 파일은 Figma 변수(새 이름 체계, `color/text/basic` 등)를 Tokens Studio 의 Import variables 로 가져와 export 한 것입니다. 예전 토큰과 루트가 겹치지 않아 함께 유지되며, Kotlin 이름은 Figma 경로를 그대로 camelCase 로 옮깁니다 (`color/surface/beige-darker` → `colorSurfaceBeigeDarker`). 현재는 색상만 산출하고 숫자 토큰(`typo.*`, `number.*`, `border-width.*`)은 사용하지 않습니다. Figma 변수의 gap·padding·radius 등 숫자(semantic)는 예전 `semantic.json` 의 같은 키를 덮어쓰므로 넣지 않았습니다.
 
 ## 로컬 빌드
 
@@ -101,16 +108,18 @@ struct PrimaryButton: View {
 }
 ```
 
-> Asset Catalog는 `Brand/`, `Semantic/`, `Component/` 폴더 namespace를 사용합니다. Swift 코드는 `Color("Brand/Primary500", bundle: .module)` 형태로 자동 접근하므로 별도 설정이 필요 없습니다.
+> Asset Catalog는 `Brand/`, `Semantic/`, `Component/`, `Figma/` 폴더 namespace를 사용합니다. Swift 코드는 `Color("Brand/Primary500", bundle: .module)` 형태로 자동 접근하므로 별도 설정이 필요 없습니다.
 
 ## 토큰 추가/수정 흐름
 
 1. Figma에서 Variables 편집
 2. Tokens Studio 로 `primitive.json` / `semantic.json` / `component.json` export → 이 레포에 push
+   - Figma 변수 색은 Import variables 후 export 한 Value(primitive)·Mode 1(mode) JSON 을 `figma/primitive.json` / `figma/mode.json` 에 덮어씀
 3. GitHub Actions 가 자동으로:
    - Style Dictionary 빌드 (1차 검증)
    - Picke-iOS checkout → `Tools/TokenGenerator.swift` 실행 (2차 검증)
    - Picke-iOS 의 `develop` 으로 자동 PR
+   - Picke-android 의 `develop` 으로 Kotlin 토큰 자동 PR (`build/android/*.kt` 전체 복사)
 4. iOS 팀이 PR review/merge
 
 ## CI 사전 준비
